@@ -1,4 +1,7 @@
 @echo off
 set "PATH=%~dp0.tools\node;%PATH%"
-echo Building SubscriptIQ for Production...
+cd /d "%~dp0frontend"
+echo ========================================================
+echo  Building SubscriptIQ Frontend for Production...
+echo ========================================================
 npm run build
