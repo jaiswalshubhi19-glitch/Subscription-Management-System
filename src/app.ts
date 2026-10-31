@@ -38,7 +38,12 @@ export function createApp(): Express {
       origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps, curl, Postman)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+        if (
+          allowedOrigins.indexOf(origin) !== -1 ||
+          allowedOrigins.includes('*') ||
+          origin.endsWith('.onrender.com') ||
+          origin.includes('localhost')
+        ) {
           callback(null, true);
         } else {
           callback(new Error('CORS access blocked by policy.'));

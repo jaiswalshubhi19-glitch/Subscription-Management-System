@@ -2,8 +2,10 @@
  * SubscriptIQ API Client
  * Connects frontend to the Express/PostgreSQL REST API (/api/v1)
  */
-
-const API_BASE = '/api/v1';
+const rawApiBase = import.meta.env.VITE_API_URL;
+const API_BASE = rawApiBase
+  ? `${rawApiBase.startsWith('http') ? rawApiBase : `https://${rawApiBase}`}/api/v1`
+  : '/api/v1';
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
