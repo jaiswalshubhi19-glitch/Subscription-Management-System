@@ -1,3 +1,5 @@
+import path from 'path';
+import fs from 'fs';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -29,7 +31,7 @@ export function createApp(): Express {
   const app = express();
 
   // 1. Security Headers
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   // 2. CORS configuration for frontend
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
@@ -113,12 +115,29 @@ export function createApp(): Express {
 
   app.use('/api/v1', apiV1);
 
-  // 8. 404 Handler
+  // 8. Serve Frontend Static Assets (if frontend/dist exists)
+  const frontendDist = path.resolve(process.cwd(), 'frontend/dist');
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist));
+    app.get('*', (req: Request, res: Response, next: NextFunction) => {
+      // Do not intercept API, health, or swagger documentation
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/health') ||
+        req.path.startsWith('/api-docs')
+      ) {
+        return next();
+      }
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  }
+
+  // 9. 404 Handler for unmatched API routes
   app.use((req: Request, res: Response, next: NextFunction) => {
     next(AppError.notFound(`Route not found: ${req.method} ${req.originalUrl}`));
   });
 
-  // 9. Centralized Error Handler
+  // 10. Centralized Error Handler
   app.use(errorHandler);
 
   return app;

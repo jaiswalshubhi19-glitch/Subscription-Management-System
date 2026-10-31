@@ -8,7 +8,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install --include=dev && npx prisma generate && npm run build && npx prisma db push && npm run prisma:seed
+    buildCommand: npm install --include=dev && npm run build && npx prisma generate && npx prisma db push && npm run prisma:seed
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -32,7 +32,7 @@ services:
     name: subscriptiq-frontend
     runtime: static
     rootDir: frontend
-    buildCommand: npm install --include=dev && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite
