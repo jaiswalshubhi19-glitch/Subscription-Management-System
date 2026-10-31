@@ -1,0 +1,528 @@
+// SubscriptIQ Database Schema (Prisma)
+// Supports multi-tenancy, strict organization isolation, integer minor currency units, and financial auditability
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum ProductType {
+  SERVICE
+  SOFTWARE
+  HARDWARE
+  ADDON
+}
+
+enum BillingInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  DRAFT
+  QUOTATION
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum BillingReason {
+  SUBSCRIPTION_CYCLE
+  SUBSCRIPTION_CREATE
+  MANUAL
+  UPGRADE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  ACH
+  CASH
+  UPI
+  MANUAL_CHECK
+  SIMULATED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountScope {
+  WHOLE_SUBSCRIPTION
+  SPECIFIC_PRODUCT
+}
+
+enum ProtectionIssueType {
+  OVERDUE_INVOICE
+  UPCOMING_RENEWAL_AT_RISK
+  FAILED_PAYMENT
+  PAST_DUE_SUBSCRIPTION
+  DUPLICATE_INVOICE
+  DUPLICATE_PAYMENT
+  REVENUE_INCONSISTENCY
+  EXPIRING_DISCOUNT
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationType {
+  BILLING
+  REVENUE_PROTECTION
+  SUBSCRIPTION
+  SYSTEM
+}
+
+model Organization {
+  id             String               @id @default(uuid())
+  name           String
+  slug           String               @unique
+  currency       String               @default("USD")
+  timezone       String               @default("UTC")
+  taxRate        Int                  @default(0) // Basis points (e.g. 1000 = 10.00%)
+  billingAddress Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  members        OrganizationMember[]
+  customers      Customer[]
+  products       Product[]
+  plans          Plan[]
+  subscriptions  Subscription[]
+  invoices       Invoice[]
+  payments       Payment[]
+  discounts      Discount[]
+  issues         RevenueProtectionIssue[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String               @id @default(uuid())
+  email        String               @unique
+  name         String
+  passwordHash String
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  memberships  OrganizationMember[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           Role         @default(MEMBER)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model Customer {
+  id             String         @id @default(uuid())
+  organizationId String
+  customerNumber String
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  address        String?
+  city           String?
+  country        String?
+  postalCode     String?
+  taxId          String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions  Subscription[]
+  invoices       Invoice[]
+  payments       Payment[]
+  issues         RevenueProtectionIssue[]
+
+  @@unique([organizationId, customerNumber])
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("customers")
+}
+
+model Product {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  code           String
+  description    String?
+  type           ProductType  @default(SOFTWARE)
+  salesPrice     Int          // integer minor units (cents)
+  costPrice      Int          @default(0) // integer minor units
+  notes          String?
+  variants       Json?        // Variant options (e.g. { brand: "Odoo", surcharge: 56000 })
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plans          Plan[]
+  discounts      Discount[]
+  invoiceItems   InvoiceItem[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("products")
+}
+
+model Plan {
+  id                     String          @id @default(uuid())
+  organizationId         String
+  productId              String
+  name                   String
+  code                   String
+  description            String?
+  billingInterval        BillingInterval @default(MONTHLY)
+  intervalCount          Int             @default(1)
+  price                  Int             // integer minor units
+  currency               String          @default("USD")
+  trialPeriodDays        Int             @default(0)
+  minQuantity            Int             @default(1)
+  maxQuantity            Int?
+  autoCloseOnExpiry      Boolean         @default(false)
+  allowEarlyCancellation Boolean         @default(true)
+  allowPause             Boolean         @default(true)
+  startDate              DateTime?
+  endDate                DateTime?
+  isActive               Boolean         @default(true)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  organization           Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product                Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  subscriptions          Subscription[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([productId])
+  @@map("plans")
+}
+
+model Subscription {
+  id                 String               @id @default(uuid())
+  organizationId     String
+  subscriptionNumber String
+  customerId         String
+  planId             String
+  status             SubscriptionStatus   @default(DRAFT)
+  quantity           Int                  @default(1)
+  unitPrice          Int                  // integer minor units snapshot
+  currency           String               @default("USD")
+  currentPeriodStart DateTime             @default(now())
+  currentPeriodEnd   DateTime
+  renewalDate        DateTime?
+  trialEndsAt        DateTime?
+  canceledAt         DateTime?
+  cancelAtPeriodEnd  Boolean              @default(false)
+  pausedAt           DateTime?
+  validUntil         DateTime?            // For quotation mode validity days
+  paymentTerms       String               @default("Due on receipt")
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer           Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  plan               Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices           Invoice[]
+  discounts          SubscriptionDiscount[]
+  issues             RevenueProtectionIssue[]
+
+  @@unique([organizationId, subscriptionNumber])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([status])
+  @@index([renewalDate])
+  @@map("subscriptions")
+}
+
+model Discount {
+  id                String                 @id @default(uuid())
+  organizationId    String
+  code              String
+  name              String
+  description       String?
+  type              DiscountType           @default(PERCENTAGE)
+  value             Int                    // Percentage in basis points (e.g. 1500 = 15.00%) or minor currency units
+  currency          String?
+  appliesTo         DiscountScope          @default(WHOLE_SUBSCRIPTION)
+  productId         String?
+  minPurchaseAmount Int?                   // minor units
+  minQuantity       Int?
+  startDate         DateTime?
+  endDate           DateTime?
+  maxUses           Int?
+  usedCount         Int                    @default(0)
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product           Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  subscriptions     SubscriptionDiscount[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("discounts")
+}
+
+model SubscriptionDiscount {
+  id             String       @id @default(uuid())
+  subscriptionId String
+  discountId     String
+  appliedAt      DateTime     @default(now())
+  expiresAt      DateTime?
+
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  discount       Discount     @relation(fields: [discountId], references: [id], onDelete: Restrict)
+
+  @@unique([subscriptionId, discountId])
+  @@index([subscriptionId])
+  @@index([discountId])
+  @@map("subscription_discounts")
+}
+
+model Invoice {
+  id               String               @id @default(uuid())
+  organizationId   String
+  invoiceNumber    String
+  subscriptionId   String?
+  customerId       String
+  status           InvoiceStatus        @default(DRAFT)
+  billingReason    BillingReason        @default(SUBSCRIPTION_CYCLE)
+  currency         String               @default("USD")
+  subtotal         Int                  // integer minor units
+  discountTotal    Int                  @default(0)
+  taxRate          Int                  @default(0) // Basis points
+  taxTotal         Int                  @default(0)
+  total            Int                  // subtotal - discountTotal + taxTotal
+  amountPaid       Int                  @default(0)
+  amountDue        Int                  // total - amountPaid
+  dueDate          DateTime
+  paidAt           DateTime?
+  voidedAt         DateTime?
+  notes            String?
+  customerSnapshot Json                 // Frozen snapshot of customer details
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription     Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  customer         Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items            InvoiceItem[]
+  allocations      PaymentAllocation[]
+  issues           RevenueProtectionIssue[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id             String    @id @default(uuid())
+  invoiceId      String
+  productId      String?
+  description    String
+  quantity       Int       @default(1)
+  unitPrice      Int       // minor units
+  discountAmount Int       @default(0)
+  taxAmount      Int       @default(0)
+  totalAmount    Int       // quantity * unitPrice - discountAmount + taxAmount
+  metadata       Json?
+
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id             String              @id @default(uuid())
+  organizationId String
+  customerId     String
+  paymentNumber  String
+  amount         Int                 // minor units
+  currency       String              @default("USD")
+  status         PaymentStatus       @default(SUCCEEDED)
+  method         PaymentMethod       @default(MANUAL_CHECK)
+  reference      String?
+  idempotencyKey String?
+  notes          String?
+  paidAt         DateTime            @default(now())
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  allocations    PaymentAllocation[]
+  issues         RevenueProtectionIssue[]
+
+  @@unique([organizationId, paymentNumber])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id        String   @id @default(uuid())
+  paymentId String
+  invoiceId String
+  amount    Int      // minor units allocated to this invoice
+  createdAt DateTime @default(now())
+
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
+}
+
+model RevenueProtectionIssue {
+  id              String              @id @default(uuid())
+  organizationId  String
+  issueType       ProtectionIssueType
+  severity        IssueSeverity       @default(MEDIUM)
+  customerId      String?
+  subscriptionId  String?
+  invoiceId       String?
+  paymentId       String?
+  title           String
+  description     String
+  suggestedAction String
+  detectedAt      DateTime            @default(now())
+  status          IssueStatus         @default(OPEN)
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  resolutionNotes String?
+  metadata        Json?
+
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  subscription    Subscription?       @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoice         Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  payment         Payment?            @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([issueType])
+  @@index([severity])
+  @@map("revenue_protection_issues")
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  organizationId String
+  userId         String?
+  type           NotificationType @default(SYSTEM)
+  title          String
+  message        String
+  isRead         Boolean          @default(false)
+  link           String?
+  createdAt      DateTime         @default(now())
+
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  entity         String
+  entityId       String
+  oldValues      Json?
+  newValues      Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
