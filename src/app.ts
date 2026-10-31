@@ -66,7 +66,22 @@ export function createApp(): Express {
   // 5. Swagger API Documentation
   setupSwagger(app);
 
-  // 6. Health Check
+  // 6. Root & Health Check
+  app.get('/', (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      name: 'SubscriptIQ API Platform',
+      version: '1.0.0',
+      status: 'active',
+      endpoints: {
+        health: '/health',
+        documentation: '/api-docs',
+        apiV1: '/api/v1',
+      },
+      message: 'SubscriptIQ REST API is up and running. Visit /api-docs for interactive Swagger documentation.',
+    });
+  });
+
   const healthHandler = (req: Request, res: Response) => {
     res.status(200).json({
       status: 'healthy',
