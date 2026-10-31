@@ -3,9 +3,21 @@
  * Connects frontend to the Express/PostgreSQL REST API (/api/v1)
  */
 const rawApiBase = import.meta.env.VITE_API_URL;
-const API_BASE = rawApiBase
-  ? `${rawApiBase.startsWith('http') ? rawApiBase : `https://${rawApiBase}`}/api/v1`
-  : '/api/v1';
+
+function getApiBase() {
+  if (!rawApiBase) return '/api/v1';
+  let host = rawApiBase.trim();
+  if (host.startsWith('http://') || host.startsWith('https://')) {
+    return `${host.replace(/\/+$/, '')}/api/v1`;
+  }
+  // If Render passed just the service name without domain (e.g. 'subscriptiq-backend')
+  if (!host.includes('.') && !host.includes('localhost')) {
+    host = `${host}.onrender.com`;
+  }
+  return `https://${host.replace(/\/+$/, '')}/api/v1`;
+}
+
+const API_BASE = getApiBase();
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;

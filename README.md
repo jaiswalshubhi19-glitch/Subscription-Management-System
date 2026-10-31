@@ -1,8 +1,14 @@
-# SubscriptIQ — Backend Platform
+# SubscriptIQ — Backend & Frontend Platform
 
 > **Intelligent Subscription Management and Revenue Protection Platform**
 
-SubscriptIQ is a production-minded backend for recurring billing, subscription lifecycle management, and deterministic revenue leak protection. Built with Node.js, Express, TypeScript, PostgreSQL, and Prisma ORM, it replaces frontend mock data with secure, multi-tenant REST APIs.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/jaiswalshubhi19-glitch/Subscription-Management-System)
+
+### 🚀 1-Click Live Cloud Deployment on Render
+Deploy the entire full-stack platform (PostgreSQL database, Express API backend, and React frontend) to Render in 1 click:
+👉 **[Deploy SubscriptIQ to Render](https://render.com/deploy?repo=https://github.com/jaiswalshubhi19-glitch/Subscription-Management-System)**
+
+SubscriptIQ is a production-minded platform for recurring billing, subscription lifecycle management, and deterministic revenue leak protection. Built with Node.js, Express, TypeScript, PostgreSQL, and Prisma ORM, seamlessly integrated with a modern React + Vite + Tailwind CSS dashboard.
 
 ---
 
